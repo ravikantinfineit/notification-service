@@ -1,0 +1,130 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  phone     String?
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notificationPreferences NotificationPreferences?
+  notificationTransactions NotificationTransaction[]
+
+  @@map("users")
+}
+
+model NotificationPreferences {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  emailEnabled      Boolean @default(true)
+  smsEnabled        Boolean @default(false)
+  whatsappEnabled   Boolean @default(false)
+  pushEnabled       Boolean @default(false)
+  
+  emailPriority     Int @default(1)
+  smsPriority       Int @default(2)
+  whatsappPriority  Int @default(3)
+  pushPriority      Int @default(4)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notification_preferences")
+}
+
+model NotificationTransaction {
+  id            String   @id @default(uuid())
+  transactionId String   @unique @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  notificationType NotificationType
+  channel         NotificationChannel
+  status          NotificationStatus @default(PENDING)
+  
+  subject       String?
+  content       String
+  recipient     String // email, phone number, etc.
+  
+  failureReason String?
+  retryCount    Int      @default(0)
+  maxRetries    Int      @default(3)
+  
+  priority      Int      @default(1) // 1 = low, 2 = medium, 3 = high, 4 = urgent
+  
+  metadata      Json?    // Additional data like template ID, variables, etc.
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  sentAt        DateTime?
+  failedAt      DateTime?
+  
+  errorLogs     ErrorLog[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([notificationType])
+  @@index([transactionId])
+  @@index([createdAt])
+  @@map("notification_transactions")
+}
+
+model ErrorLog {
+  id                    String   @id @default(uuid())
+  transactionId         String
+  transaction           NotificationTransaction @relation(fields: [transactionId], references: [transactionId], onDelete: Cascade)
+  
+  errorType             String   // RETRYABLE, NON_RETRYABLE, NETWORK_ERROR, etc.
+  errorMessage          String
+  errorStack            String?
+  errorCode             String?
+  
+  retryable             Boolean  @default(true)
+  providerResponse      Json?    // Response from external provider
+  
+  createdAt             DateTime @default(now())
+
+  @@index([transactionId])
+  @@index([errorType])
+  @@index([createdAt])
+  @@map("error_logs")
+}
+
+enum NotificationType {
+  TRANSACTIONAL
+  MARKETING
+  ALERT
+  VERIFICATION
+  REMINDER
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+  PUSH
+}
+
+enum NotificationStatus {
+  PENDING
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+  RETRY
+  DEAD_LETTER
+}
+

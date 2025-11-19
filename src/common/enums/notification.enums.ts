@@ -1,0 +1,41 @@
+export enum NotificationType {
+  TRANSACTIONAL = 'TRANSACTIONAL',
+  MARKETING = 'MARKETING',
+  ALERT = 'ALERT',
+  VERIFICATION = 'VERIFICATION',
+  REMINDER = 'REMINDER',
+}
+
+export enum NotificationChannel {
+  EMAIL = 'EMAIL',
+  SMS = 'SMS',
+  WHATSAPP = 'WHATSAPP',
+  PUSH = 'PUSH',
+}
+
+export enum NotificationStatus {
+  PENDING = 'PENDING',
+  QUEUED = 'QUEUED',
+  PROCESSING = 'PROCESSING',
+  SENT = 'SENT',
+  FAILED = 'FAILED',
+  RETRY = 'RETRY',
+  DEAD_LETTER = 'DEAD_LETTER',
+}
+
+export enum NotificationPriority {
+  LOW = 1,
+  MEDIUM = 2,
+  HIGH = 3,
+  URGENT = 4,
+}
+
+export enum ErrorType {
+  RETRYABLE = 'RETRYABLE',
+  NON_RETRYABLE = 'NON_RETRYABLE',
+  NETWORK_ERROR = 'NETWORK_ERROR',
+  INVALID_DATA = 'INVALID_DATA',
+  PROVIDER_ERROR = 'PROVIDER_ERROR',
+  RATE_LIMIT = 'RATE_LIMIT',
+  AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
+}
