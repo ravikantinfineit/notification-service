@@ -8,6 +8,7 @@ import {
 } from '../common/enums/notification.enums';
 import { CreateNotificationDto } from '../common/dto/create-notification.dto';
 import { v4 as uuidv4 } from 'uuid';
+import { getErrorMessage, getErrorCode } from '../common/utils/error-utils';
 
 /**
  * Transaction Tracking Service
@@ -89,7 +90,15 @@ export class TransactionTrackingService {
     failureReason?: string,
     providerResponse?: any,
   ) {
-    const updateData: any = {
+    const updateData: {
+      status: NotificationStatus;
+      updatedAt: Date;
+      sentAt?: Date;
+      failedAt?: Date;
+      failureReason?: string | null;
+      retryCount?: { increment: number };
+      metadata?: Record<string, any>;
+    } = {
       status,
       updatedAt: new Date(),
     };
@@ -108,6 +117,7 @@ export class TransactionTrackingService {
       };
     }
 
+    // Optimize: Fetch existing metadata only when needed to merge provider response
     if (providerResponse) {
       const existing = await this.prisma.notificationTransaction.findUnique({
         where: { transactionId },
@@ -143,21 +153,23 @@ export class TransactionTrackingService {
    */
   async logError(transactionId: string, error: any, retryable: boolean = true) {
     const errorType = this.determineErrorType(error, retryable);
+    const errorMessage = getErrorMessage(error);
+    const errorCode = getErrorCode(error);
 
     await this.prisma.errorLog.create({
       data: {
         transactionId,
         errorType,
-        errorMessage: error.message || 'Unknown error',
-        errorStack: error.stack,
-        errorCode: error.code || error.statusCode?.toString(),
+        errorMessage,
+        errorStack: error?.stack || null,
+        errorCode,
         retryable,
-        providerResponse: error.response || error.body || null,
+        providerResponse: error?.response || error?.body || null,
       },
     });
 
     this.logger.error(
-      `Logged error for transaction ${transactionId}: ${errorType} - ${error.message}`,
+      `Logged error for transaction ${transactionId}: ${errorType} - ${errorMessage}`,
     );
   }
 

@@ -4,6 +4,7 @@ import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { NotificationService } from '../notification/notification.service';
 import { TransactionTrackingService } from '../transaction-tracking/transaction-tracking.service';
 import { NotificationChannel, NotificationStatus } from '../common/enums/notification.enums';
+import { isRetryableError } from '../common/utils/error-utils';
 
 interface NotificationJobData {
   transactionId: string;
@@ -85,7 +86,8 @@ export class NotificationProcessor extends WorkerHost {
       );
 
       // Log error
-      await this.trackingService.logError(transactionId, error, this.isRetryableError(error));
+      const retryable = isRetryableError(error);
+      await this.trackingService.logError(transactionId, error, retryable);
 
       // Update status based on retry count
       const transaction = await this.trackingService.getTransaction(transactionId);
@@ -115,34 +117,5 @@ export class NotificationProcessor extends WorkerHost {
   @OnWorkerEvent('failed')
   onFailed(job: Job, error: Error) {
     this.logger.error(`Job ${job.id} failed: ${error.message}`);
-  }
-
-  private isRetryableError(error: any): boolean {
-    // Network errors, timeouts, and rate limits are retryable
-    if (
-      error.code === 'ETIMEDOUT' ||
-      error.code === 'ECONNREFUSED' ||
-      error.code === 'ENOTFOUND' ||
-      error.message?.includes('timeout') ||
-      error.message?.includes('rate limit') ||
-      error.statusCode === 429 ||
-      error.statusCode === 503
-    ) {
-      return true;
-    }
-
-    // Authentication errors and invalid data are not retryable
-    if (
-      error.statusCode === 401 ||
-      error.statusCode === 403 ||
-      error.statusCode === 400 ||
-      error.message?.includes('invalid') ||
-      error.message?.includes('not found')
-    ) {
-      return false;
-    }
-
-    // Default to retryable for unknown errors
-    return true;
   }
 }

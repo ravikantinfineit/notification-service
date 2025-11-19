@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Query,
-  Param,
-  ParseUUIDPipe,
-  ParseEnumPipe,
-  ParseBoolPipe,
-  ParseIntPipe,
-} from '@nestjs/common';
+import { Controller, Get, Query, Param, ParseUUIDPipe } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,

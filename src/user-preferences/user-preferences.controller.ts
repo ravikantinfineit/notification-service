@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Param, Body, UseGuards, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Put, Param, Body, ParseUUIDPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
 import { UserPreferencesService } from './user-preferences.service';
 import { UpdatePreferencesDto } from '../common/dto/update-preferences.dto';

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -181,53 +181,88 @@ export class NotificationController {
   })
   @ApiResponse({ status: 400, description: 'Invalid request data' })
   async sendBulkNotifications(@Body() dto: { notifications: CreateNotificationDto[] }) {
-    const results = [];
+    // Process notifications in parallel batches to optimize performance
+    const BATCH_SIZE = 50; // Process 50 notifications at a time
+    const results: Array<{
+      success: boolean;
+      transactionId?: string;
+      userId: string;
+      error?: string;
+    }> = [];
 
-    for (const notification of dto.notifications) {
-      try {
-        const transactionId = await this.trackingService.createTransaction(
-          notification.userId,
-          notification,
-        );
+    // Process in batches to avoid overwhelming the system
+    for (let i = 0; i < dto.notifications.length; i += BATCH_SIZE) {
+      const batch = dto.notifications.slice(i, i + BATCH_SIZE);
 
-        const preferredChannels = await this.preferencesService.getPreferredChannels(
-          notification.userId,
-        );
-        const channel = notification.channel || preferredChannels[0] || NotificationChannel.EMAIL;
-        const channelPriority = await this.preferencesService.getChannelPriority(
-          notification.userId,
-          channel,
-        );
-        const priority = notification.priority || channelPriority || NotificationPriority.MEDIUM;
+      // Process batch in parallel
+      const batchResults = await Promise.allSettled(
+        batch.map(async (notification) => {
+          try {
+            const transactionId = await this.trackingService.createTransaction(
+              notification.userId,
+              notification,
+            );
 
-        await this.queueService.addNotificationToQueue(
-          {
-            ...notification,
-            channel,
-            priority,
-          },
-          transactionId,
-        );
+            // Batch fetch user preferences to reduce database queries
+            const [preferredChannels, channelPriority] = await Promise.all([
+              this.preferencesService.getPreferredChannels(notification.userId),
+              notification.channel
+                ? this.preferencesService.getChannelPriority(notification.userId, notification.channel)
+                : Promise.resolve(NotificationPriority.MEDIUM),
+            ]);
 
-        results.push({
-          success: true,
-          transactionId,
-          userId: notification.userId,
-        });
-      } catch (error) {
-        results.push({
-          success: false,
-          userId: notification.userId,
-          error: error.message,
-        });
-      }
+            const channel =
+              notification.channel || preferredChannels[0] || NotificationChannel.EMAIL;
+            const priority =
+              notification.priority || channelPriority || NotificationPriority.MEDIUM;
+
+            await this.queueService.addNotificationToQueue(
+              {
+                ...notification,
+                channel,
+                priority,
+              },
+              transactionId,
+            );
+
+            return {
+              success: true,
+              transactionId,
+              userId: notification.userId,
+            };
+          } catch (error) {
+            return {
+              success: false,
+              userId: notification.userId,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            };
+          }
+        }),
+      );
+
+      // Convert Promise.allSettled results to our format
+      batchResults.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          results.push(result.value);
+        } else {
+          // This shouldn't happen with Promise.allSettled, but handle it anyway
+          results.push({
+            success: false,
+            userId: 'unknown',
+            error: result.reason?.message || 'Unknown error',
+          });
+        }
+      });
     }
+
+    const queued = results.filter((r) => r.success).length;
+    const failed = results.filter((r) => !r.success).length;
 
     return {
       success: true,
       total: dto.notifications.length,
-      queued: results.filter((r) => r.success).length,
-      failed: results.filter((r) => !r.success).length,
+      queued,
+      failed,
       results,
     };
   }

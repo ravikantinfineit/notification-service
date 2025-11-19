@@ -4,6 +4,7 @@ import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { NotificationService } from '../notification/notification.service';
 import { TransactionTrackingService } from '../transaction-tracking/transaction-tracking.service';
 import { NotificationChannel, NotificationStatus } from '../common/enums/notification.enums';
+import { isRetryableError } from '../common/utils/error-utils';
 
 interface NotificationJobData {
   transactionId: string;
@@ -78,7 +79,8 @@ export class PriorityNotificationProcessor extends WorkerHost {
         error.stack,
       );
 
-      await this.trackingService.logError(transactionId, error, this.isRetryableError(error));
+      const retryable = isRetryableError(error);
+      await this.trackingService.logError(transactionId, error, retryable);
 
       const transaction = await this.trackingService.getTransaction(transactionId);
       if (transaction && transaction.retryCount >= transaction.maxRetries) {
@@ -107,31 +109,5 @@ export class PriorityNotificationProcessor extends WorkerHost {
   @OnWorkerEvent('failed')
   onFailed(job: Job, error: Error) {
     this.logger.error(`Priority job ${job.id} failed: ${error.message}`);
-  }
-
-  private isRetryableError(error: any): boolean {
-    if (
-      error.code === 'ETIMEDOUT' ||
-      error.code === 'ECONNREFUSED' ||
-      error.code === 'ENOTFOUND' ||
-      error.message?.includes('timeout') ||
-      error.message?.includes('rate limit') ||
-      error.statusCode === 429 ||
-      error.statusCode === 503
-    ) {
-      return true;
-    }
-
-    if (
-      error.statusCode === 401 ||
-      error.statusCode === 403 ||
-      error.statusCode === 400 ||
-      error.message?.includes('invalid') ||
-      error.message?.includes('not found')
-    ) {
-      return false;
-    }
-
-    return true;
   }
 }
